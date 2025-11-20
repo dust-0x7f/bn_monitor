@@ -43,6 +43,9 @@ class BNMonitor:
     def __init__(self):
         self.client = Client(api_key=API_KEY, api_secret=SECRET_KEY, testnet=False)
 
+    def getServerTime(self):
+        return self.client.get_server_time()
+
     def getSymbol5MinutesKlines(self,symbol,startTimeUnix):
         kline_list = []
         try:
@@ -86,11 +89,8 @@ class BNMonitor:
         return kline_list
 
     def getTargetSymbols(self):
-        resp = self.client.get_exchange_info()
+        resp = self.client.futures_exchange_info()
         result = []
         for item in resp["symbols"]:
-            if item["status"] == "TRADING":
-                result.append(item["symbol"])
+            result.append(item["pair"])
         print(result)
-
-

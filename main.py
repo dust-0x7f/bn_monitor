@@ -95,7 +95,7 @@ def job(specified_time: Optional[str] = None):
 
 
 def check_last_k_volume(kines: List[KlineData]) -> bool:
-    return kines[-1].volume > 5 * sum([k.volume for k in kines[:-1]]) / len(kines[:-1])
+    return kines[-1].volume > 5 * sum([k.volume for k in kines[1:11]]) / len(kines[1:11])
 
 def check_sum_volume(klines: List[KlineData]) -> bool:
     last_3_klines = klines[3:]
