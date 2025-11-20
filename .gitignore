@@ -1,0 +1,87 @@
+# -------------------------- PyCharm IDE 相关 --------------------------
+# 项目配置文件（包含本地路径、环境配置等，不适合共享）
+.idea/
+# 单独的 .iml 模块文件（若用 .idea 整体忽略，可不用单独写）
+*.iml
+# 编译输出目录
+out/
+# 运行配置缓存
+.run/
+# 调试日志
+debug.log
+# 终端历史
+terminal/
+# 代码覆盖率报告（PyCharm 内置工具生成）
+coverage/
+# 拼写检查缓存
+dictionaries/
+# 本地历史记录（PyCharm 本地回滚用，无需提交）
+.localhistory/
+# 性能分析报告
+profile/
+# 临时配置备份
+.backup/
+# 插件相关缓存
+.plugins/
+# 自定义主题/颜色配置
+colors/
+# 代码格式化缓存
+formatter.xml
+# 其他 IDE 临时文件
+*.iws
+*.ipr
+.idea_modules/
+
+# -------------------------- Python 项目通用 --------------------------
+# 字节码文件（编译产物）
+__pycache__/
+*.py[cod]
+*$py.class
+# 测试覆盖率报告（pytest-cov 等工具生成）
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+# 虚拟环境（本地依赖环境，无需提交）
+venv/
+env/
+ENV/
+.venv/
+# 依赖包下载缓存
+.pip/
+# 项目打包/分发目录
+dist/
+build/
+*.egg-info/
+*.egg
+# 文档生成目录（Sphinx 等）
+docs/_build/
+# 日志文件
+*.log
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+# 环境变量配置文件（包含密钥、数据库地址等敏感信息）
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# Jupyter Notebook 缓存
+.ipynb_checkpoints/
+# PyInstaller 打包缓存
+__pycache__/
+*.spec
+# 其他常见冗余文件
+.DS_Store  # macOS 系统文件
+Thumbs.db  # Windows 系统文件
+*.swp      # Vim 临时文件
+*.swo      # Vim 临时文件
+*~         # 临时备份文件
