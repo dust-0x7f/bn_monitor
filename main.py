@@ -123,10 +123,9 @@ def check_avg_volume_2h(klines: List[KlineData]) -> bool:
     return avg_last_3 >= avg_prev * VOLUME_MULTIPLE
 
 def check_increase(klines: List[KlineData]) -> bool:
-    last_3_klines = klines[-3:]
     max_price = klines[-1].high_price
     for v in klines[:-3]:
-        if v.close_price > max_price:
+        if v.close_price > max_price * 1.05:
             return False
     return True
 
