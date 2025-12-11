@@ -46,7 +46,7 @@ class BNMonitor:
     def getSymbol5MinutesKlines(self,symbol,startTimeUnix):
         kline_list = []
         try:
-            resp = self.client.futures_klines(symbol = symbol,interval = "5m",startTime = startTimeUnix)
+            resp = self.client.futures_klines(symbol = symbol,interval = "3m",startTime = startTimeUnix)
             for kline in resp:
                 data = KlineData(
                     open_time=kline[0],
@@ -70,6 +70,7 @@ class BNMonitor:
                     f"⚠️ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 429限流警告\n"
                     f"{'=' * 80}\n"
                 )
+                print(error_msg)
             else:
                 error_msg = (
                     f"\n{'=' * 80}\n"

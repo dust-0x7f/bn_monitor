@@ -10,7 +10,7 @@ from symbols import symbols
 
 bn_monitor = BNMonitor()
 POLL_INTERVAL = 5  # 定时任务间隔（分钟）
-LOOK_BACK_MINUTES = 180 # 回溯时间（当前时间前30分钟）
+LOOK_BACK_MINUTES = 90 # 回溯时间（当前时间前30分钟）
 KLINE_INTERVAL = 5  # K线周期（5分钟，与接口保持一致）
 KLINE_LIMIT = 10  # 获取的K线总数（最后3根+前7根）
 VOLUME_MULTIPLE = 3  # 成交量倍数阈值
@@ -51,7 +51,7 @@ def calculate_start_time(specified_time: Optional[str] = None) -> int:
     return start_time_unix
 
 
-def job(specified_time: Optional[str] = None):
+def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = None):
     """定时任务核心逻辑：遍历symbols，获取K线数据"""
 
     # 计算startTimeUnix（支持指定时间）
@@ -60,20 +60,30 @@ def job(specified_time: Optional[str] = None):
     volume_analysis = []  # 存储详细的成交量分析结果
 
     # 2. 遍历所有symbol，逐个获取K线
-    for symbol in symbols:
-        # 获取KlineData列表
-        klines = bn_monitor.getSymbol5MinutesKlines(symbol, start_time_unix)
+    if specified_symbol:
+        klines = bn_monitor.getSymbol5MinutesKlines(specified_symbol, start_time_unix)
         if not klines:
-            print(f"⚠️ {symbol} 未获取到有效K线数据")
+            print(f"⚠️ {specified_symbol} 未获取到有效K线数据")
             time.sleep(0.5)
-            continue
-
         # 检查成交量条件，并获取详细分析
-        meet_condition = check_volume_condition(klines, symbol)
+        meet_condition = check_volume_condition(klines, specified_symbol)
         if meet_condition:
-            result.append(symbol)
+            result.append(specified_symbol)
+    else :
+        for symbol in symbols:
+            # 获取KlineData列表
+            klines = bn_monitor.getSymbol5MinutesKlines(symbol, start_time_unix)
+            if not klines:
+                print(f"⚠️ {symbol} 未获取到有效K线数据")
+                time.sleep(0.5)
+                continue
 
-        time.sleep(0.5)  # 循环间隔0.5秒
+            # 检查成交量条件，并获取详细分析
+            meet_condition = check_volume_condition(klines, symbol)
+            if meet_condition:
+                result.append(symbol)
+
+            time.sleep(0.5)  # 循环间隔0.5秒
 
     # 过滤条件：满足条件的symbol数量不超过总数量的一半（保持原有逻辑）
     if len(result) > 10 :
@@ -86,9 +96,9 @@ def job(specified_time: Optional[str] = None):
     print("\n" + "=" * 80)
     print(f"🚨 满足条件的合约列表（共 {len(result)} 个）：")
     print("=" * 80)
-    if volume_analysis:
-        for idx, analysis in enumerate(volume_analysis, 1):
-            print(f"\n{idx}. 合约：{analysis['symbol']}")
+    if result:
+        for idx, analysis in enumerate(result, 1):
+            print(f"\n{idx}. 合约：{analysis}")
     else:
         print("📭 暂无满足成交量条件的合约")
     print("=" * 80 + "\n")
@@ -112,9 +122,18 @@ def check_avg_volume_2h(klines: List[KlineData]) -> bool:
         return False
     return avg_last_3 >= avg_prev * VOLUME_MULTIPLE
 
+def check_increase(klines: List[KlineData]) -> bool:
+    last_3_klines = klines[-3:]
+    max_price = klines[-1].high_price
+    for v in klines[:-3]:
+        if v.close_price > max_price:
+            return False
+    return True
+
 
 def check_volume_condition(klines: List[KlineData], symbol: str) -> bool:
-    return check_sum_volume(klines) or check_avg_volume_2h(klines) or check_last_k_volume(klines)
+    return (check_sum_volume(klines) or check_avg_volume_2h(klines) or check_last_k_volume(klines)) and \
+        check_increase(klines)
 
 
 if __name__ == "__main__":
