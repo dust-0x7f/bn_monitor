@@ -9,7 +9,7 @@ from bn_tool import BNMonitor, KlineData, fail_symbols
 from symbols import symbols
 
 bn_monitor = BNMonitor()
-POLL_INTERVAL = 5  # 定时任务间隔（分钟）
+POLL_INTERVAL = 3  # 定时任务间隔（分钟）
 LOOK_BACK_MINUTES = 90 # 回溯时间（当前时间前30分钟）
 KLINE_INTERVAL = 5  # K线周期（5分钟，与接口保持一致）
 KLINE_LIMIT = 10  # 获取的K线总数（最后3根+前7根）
@@ -186,5 +186,4 @@ if __name__ == "__main__":
     # 3. 持续运行定时任务
     while True:
         schedule.run_pending()  # 检查是否有任务需要执行
-        time.sleep(1)  # 避免CPU占用过高
 
