@@ -18,24 +18,26 @@ VOLUME_MULTIPLE = 3  # 成交量倍数阈值
 NEWEST_KLINES_COUNT = 5
 
 
-def calculate_start_time(specified_time: Optional[str] = None) -> int:
+def calculate_start_time(specified_time: Optional[str] = None, pre_delta_minutes: Optional[int] = None, pre_delta_hours: Optional[int] = None) -> int:
     TIME_FORMAT = "%Y-%m-%d %H:%M"
     """
     计算startTimeUnix：
     - 若传入specified_time（格式YYYY-MM-DD HH:mm），则用该时间对齐到5分钟整
     - 若未传入，则用当前时间前30分钟对齐到5分钟整
     """
+    delta_hours = pre_delta_hours if pre_delta_hours is not None else 0
+    delta_minutes = pre_delta_minutes if pre_delta_minutes is not None else 0
     if specified_time:
         # 解析指定时间
         try:
             target_time = datetime.strptime(specified_time, TIME_FORMAT)
-            print(f"\n📅 已指定时间：{target_time.strftime(TIME_FORMAT)}")
+            # print(f"\n📅 已指定时间：{target_time.strftime(TIME_FORMAT)}")
         except ValueError:
             raise ValueError(f"❌ 指定时间格式错误！请使用 {TIME_FORMAT}（如 2025-11-19 22:00）")
     else:
         # 无指定时间：当前时间前30分钟
-        target_time = datetime.now() - timedelta(minutes=LOOK_BACK_MINUTES)
-        print(f"\n📅 未指定时间，使用当前时间前{LOOK_BACK_MINUTES}分钟：{target_time.strftime(TIME_FORMAT)}")
+        target_time = datetime.now() - timedelta(hours=delta_hours,minutes=delta_minutes)
+        # print(f"\n📅 未指定时间，使用当前时间前{LOOK_BACK_MINUTES}分钟：{target_time.strftime(TIME_FORMAT)}")
 
     # 对齐到5分钟整数倍（核心逻辑不变）
     aligned_minute = (target_time.minute // KLINE_INTERVAL) * KLINE_INTERVAL
@@ -47,7 +49,7 @@ def calculate_start_time(specified_time: Optional[str] = None) -> int:
     start_time_unix = int(aligned_time.timestamp() * 1000)
 
     # 打印结果
-    print(f"📅 对齐后时间：{aligned_time.strftime('%Y-%m-%d %H:%M:%S')} → 时间戳：{start_time_unix}")
+    # print(f"📅 对齐后时间：{aligned_time.strftime('%Y-%m-%d %H:%M:%S')} → 时间戳：{start_time_unix}")
     return start_time_unix
 
 
@@ -55,9 +57,8 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
     """定时任务核心逻辑：遍历symbols，获取K线数据"""
 
     # 计算startTimeUnix（支持指定时间）
-    start_time_unix = calculate_start_time(specified_time)
+    start_time_unix = calculate_start_time(specified_time,pre_delta_minutes=90)
     result = []  # 存储满足条件的symbol
-    volume_analysis = []  # 存储详细的成交量分析结果
 
     # 2. 遍历所有symbol，逐个获取K线
     if specified_symbol:
@@ -66,8 +67,14 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
             print(f"⚠️ {specified_symbol} 未获取到有效K线数据")
             time.sleep(0.5)
         # 检查成交量条件，并获取详细分析
-        meet_condition = check_volume_condition(klines, specified_symbol)
-        if meet_condition:
+        volume_check = 0
+        if check_sum_volume(klines):
+            volume_check |= 1
+        elif check_avg_volume(klines):
+            volume_check |= 2
+        elif check_last_k_volume(klines):
+            volume_check |= 4
+        if volume_check > 0 and  check_increase(klines):
             result.append(specified_symbol)
     else :
         for symbol in symbols:
@@ -79,21 +86,32 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
                 continue
 
             # 检查成交量条件，并获取详细分析
-            meet_condition = check_volume_condition(klines, symbol)
-            if meet_condition:
-                result.append(symbol)
+            volume_check = 0
+            if check_sum_volume(klines):
+                volume_check |= 1
+            elif check_avg_volume(klines):
+                volume_check |= 2
+            elif check_last_k_volume(klines):
+                volume_check |= 4
 
-            time.sleep(0.5)  # 循环间隔0.5秒
+
+            if volume_check > 0 and  check_increase(klines):
+                pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 10)
+                # 然后去check4小时线
+                hours_4_Klines = bn_monitor.getSymbol4HoursKlines(symbol,pre_4hours_unix)
+                if hours_4_Klines[-1].volume > sum(v.volume for v in hours_4_Klines[:-1]) / (len(hours_4_Klines) - 1):
+                    result.append(symbol)
+                    print(symbol)
+            time.sleep(0.3)  # 循环间隔0.3秒
 
     # 过滤条件：满足条件的symbol数量不超过总数量的一半（保持原有逻辑）
     if len(result) > 10 :
         return
 
-    msg = '\n'.join(result)
-    show_topmost_popup(msg)
-
+    show_topmost_popup(','.join(result))
     # 打印最终结果（包含详细成交量分析）
     print("\n" + "=" * 80)
+
     print(f"🚨 满足条件的合约列表（共 {len(result)} 个）：")
     print("=" * 80)
     if result:
@@ -108,11 +126,11 @@ def check_last_k_volume(kines: List[KlineData]) -> bool:
     return kines[-1].volume > 5 * sum([k.volume for k in kines[:-1]]) / len(kines[:-1])
 
 def check_sum_volume(klines: List[KlineData]) -> bool:
-    last_3_klines = klines[3:]
+    last_3_klines = klines[-3:]
     prev_klines = klines[:-3]
     return sum([k.volume for k in last_3_klines]) >  sum([k.volume for k in prev_klines])
 
-def check_avg_volume_2h(klines: List[KlineData]) -> bool:
+def check_avg_volume(klines: List[KlineData]) -> bool:
     # 分割最后3根和历史K线
     last_3_klines = klines[-NEWEST_KLINES_COUNT:]
     prev_klines = klines[:-NEWEST_KLINES_COUNT]
@@ -122,16 +140,18 @@ def check_avg_volume_2h(klines: List[KlineData]) -> bool:
         return False
     return avg_last_3 >= avg_prev * VOLUME_MULTIPLE
 
+# 当前收盘价大于前面所有k线的平均收盘价
 def check_increase(klines: List[KlineData]) -> bool:
-    max_price = klines[-1].high_price
-    for v in klines[:-3]:
-        if v.close_price > max_price * 1.05:
-            return False
-    return True
+    close_price = klines[-1].close_price
+    prev_klines = klines[:-1]
+    avg_prev_close = sum(k.close_price for k in prev_klines) / len(prev_klines)
+    if close_price > avg_prev_close:
+        return True
+    return False
 
 
 def check_volume_condition(klines: List[KlineData], symbol: str) -> bool:
-    return (check_sum_volume(klines) or check_avg_volume_2h(klines) or check_last_k_volume(klines)) and \
+    return (check_sum_volume(klines) or check_avg_volume(klines) or check_last_k_volume(klines)) and \
         check_increase(klines)
 
 
