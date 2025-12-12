@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 import schedule
 
-from alert import show_topmost_popup
+from alert import pop_up
 from bn_tool import BNMonitor, KlineData, fail_symbols
 from symbols import symbols
 
@@ -62,53 +62,60 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
 
     # 2. 遍历所有symbol，逐个获取K线
     if specified_symbol:
-        klines = bn_monitor.getSymbol5MinutesKlines(specified_symbol, start_time_unix)
-        if not klines:
+        klines_3min = bn_monitor.getSymbol3MinutesKlines(specified_symbol, start_time_unix)
+        if not klines_3min:
             print(f"⚠️ {specified_symbol} 未获取到有效K线数据")
             time.sleep(0.5)
         # 检查成交量条件，并获取详细分析
         volume_check = 0
-        if check_sum_volume(klines):
+        if check_sum_volume(klines_3min):
             volume_check |= 1
-        elif check_avg_volume(klines):
+        elif check_avg_volume(klines_3min):
             volume_check |= 2
-        elif check_last_k_volume(klines):
+        elif check_last_k_volume(klines_3min):
             volume_check |= 4
-        if volume_check > 0 and  check_increase(klines):
+        if volume_check > 0 and  check_increase(klines_3min):
             result.append(specified_symbol)
     else :
         for symbol in symbols:
             # 获取KlineData列表
-            klines = bn_monitor.getSymbol5MinutesKlines(symbol, start_time_unix)
-            if not klines:
+            klines_3min = bn_monitor.getSymbol3MinutesKlines(symbol, start_time_unix)
+            if not klines_3min:
                 print(f"⚠️ {symbol} 未获取到有效K线数据")
                 time.sleep(0.5)
                 continue
 
             # 检查成交量条件，并获取详细分析
             volume_check = 0
-            if check_sum_volume(klines):
+            if check_sum_volume(klines_3min):
                 volume_check |= 1
-            elif check_avg_volume(klines):
+            elif check_avg_volume(klines_3min):
                 volume_check |= 2
-            elif check_last_k_volume(klines):
+            elif check_last_k_volume(klines_3min):
                 volume_check |= 4
 
 
-            if volume_check > 0 and  check_increase(klines):
-                pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 10)
+            if volume_check > 0 and check_increase(klines_3min):
+                pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 20)
                 # 然后去check4小时线
-                hours_4_Klines = bn_monitor.getSymbol4HoursKlines(symbol,pre_4hours_unix)
-                if hours_4_Klines[-1].volume > sum(v.volume for v in hours_4_Klines[:-1]) / (len(hours_4_Klines) - 1):
+                klines_4_hours = bn_monitor.getSymbol4HoursKlines(symbol,pre_4hours_unix)
+                if klines_4_hours[-1].volume > sum(v.volume for v in klines_4_hours[:-1]) / (len(klines_4_hours) - 1):
                     result.append(symbol)
-                    print(symbol)
-            time.sleep(0.3)  # 循环间隔0.3秒
+                    print("\n" + "=" * 80)
+                    print(f"{symbol} 满足条件")
+                    print("\n" + "=" * 80)
+
+                    # 非常重要
+                    if check_last_3min_klines_increase(klines_3min):
+                        pop_up(symbol)
+
 
     # 过滤条件：满足条件的symbol数量不超过总数量的一半（保持原有逻辑）
     if len(result) > 10 :
         return
 
-    show_topmost_popup(','.join(result))
+    if len(result) > 0:
+        pop_up(','.join(result))
     # 打印最终结果（包含详细成交量分析）
     print("\n" + "=" * 80)
 
@@ -153,6 +160,17 @@ def check_increase(klines: List[KlineData]) -> bool:
 def check_volume_condition(klines: List[KlineData], symbol: str) -> bool:
     return (check_sum_volume(klines) or check_avg_volume(klines) or check_last_k_volume(klines)) and \
         check_increase(klines)
+
+def check_last_3min_klines_increase(klines: List[KlineData]) -> bool:
+    last_3_klines = klines[-3:]
+    for i in range(1,len(last_3_klines)):
+        pre = last_3_klines[i - 1]
+        now = last_3_klines[i]
+        if not (now.close_price > now.open_price and pre.close_price > pre.open_price):
+            return False
+    return True
+
+
 
 
 if __name__ == "__main__":

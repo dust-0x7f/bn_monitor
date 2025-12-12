@@ -86,7 +86,7 @@ class BNMonitor:
                 print(error_msg)
 
         return kline_list
-    def getSymbol5MinutesKlines(self,symbol,startTimeUnix):
+    def getSymbol3MinutesKlines(self, symbol, startTimeUnix):
         kline_list = []
         try:
             resp = self.client.futures_klines(symbol = symbol,interval = "3m",startTime = startTimeUnix)

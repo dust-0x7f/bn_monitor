@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-def show_topmost_popup(message: str):
+def pop_up(message: str):
     # 创建主窗口
     root = tk.Tk()
     root.title("置顶提示")

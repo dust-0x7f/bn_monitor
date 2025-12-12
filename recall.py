@@ -1,4 +1,4 @@
-from main import job
+from gainers_predict_main import job
 
 if __name__ == '__main__':
     symbol = "HOTUSDT"
