@@ -1,9 +1,7 @@
-import os
 from dataclasses import dataclass
 from datetime import datetime
 
 from binance import BinanceAPIException
-from dotenv import load_dotenv
 from binance.client import Client  # 现货客户端
 
 
@@ -44,52 +42,10 @@ class BNMonitor:
         self.client = Client(api_key=API_KEY, api_secret=SECRET_KEY, testnet=False)
 
 
-    def getSymbol4HoursKlines(self,symbol,startTimeUnix):
+    def getSymbolKlines(self,symbol,internal,startTimeUnix):
         kline_list = []
         try:
-            resp = self.client.futures_klines(symbol=symbol, interval="4h", startTime=startTimeUnix)
-            for kline in resp:
-                data = KlineData(
-                    open_time=kline[0],
-                    open_price=float(kline[1]),
-                    high_price=float(kline[2]),
-                    low_price=float(kline[3]),
-                    close_price=float(kline[4]),
-                    volume=float(kline[5]),
-                    close_time=kline[6],
-                    quote_volume=float(kline[7]),
-                    trade_count=int(kline[8]),
-                    buy_volume=float(kline[9]),
-                    buy_quote_volume=float(kline[10]),
-                    ignore=kline[11]
-                )
-                kline_list.append(data)
-        except BinanceAPIException as e:
-            if e.status_code == 429:
-                error_msg = (
-                    f"\n{'=' * 80}\n"
-                    f"⚠️ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 429限流警告\n"
-                    f"{'=' * 80}\n"
-                )
-                print(error_msg)
-            else:
-                error_msg = (
-                    f"\n{'=' * 80}\n"
-                    f"❌ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 币安API错误\n"
-                    f"📋 请求参数：{symbol}\n"
-                    f"🔍 异常类型：{type(e).__name__}\n"
-                    f"📞 状态码：{e.status_code}\n"
-                    f"💬 异常信息：{str(e)}\n"
-                    f"{'=' * 80}\n"
-                )
-                fail_symbols.append(symbol)
-                print(error_msg)
-
-        return kline_list
-    def getSymbol3MinutesKlines(self, symbol, startTimeUnix):
-        kline_list = []
-        try:
-            resp = self.client.futures_klines(symbol = symbol,interval = "3m",startTime = startTimeUnix)
+            resp = self.client.futures_klines(symbol=symbol, interval=internal, startTime=startTimeUnix)
             for kline in resp:
                 data = KlineData(
                     open_time=kline[0],
@@ -138,3 +94,6 @@ class BNMonitor:
         print(result)
 
 
+
+bn_monitor = BNMonitor()
+# bn_monitor.getSymbolKlines("BTCUSDT","1h",1765595880000)
