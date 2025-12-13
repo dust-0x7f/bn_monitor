@@ -1,41 +1,36 @@
-import threading
-import tkinter as tk
-from tkinter import ttk
+import platform
+import subprocess
 
 
 def pop_up(message: str):
-    """非阻塞的置顶提示弹窗（子线程运行）"""
-    root = tk.Tk()
-    root.title("置顶提示")
+    """系统原生通知（无Tkinter，跨平台，子线程可直接调用）"""
+    if platform.system() == "Darwin":  # macOS
+        """macOS 长久停留的系统通知（提醒样式，不自动消失）"""
+        # 处理特殊字符（避免脚本报错）
+        safe_message = message.replace('"', '\\"').replace('\n', '\\n')
+        # 发送「提醒样式」通知（长久停留）
+        cmd = f'''
+           osascript -e 'tell application "System Events"
+               display notification "{safe_message}" with title "交易提醒" subtitle "异常合约警告" sound name "Glass"
+           end tell'
+           '''
+        # 执行并打印调试信息
+        result = subprocess.run(cmd, shell=True, stderr=subprocess.PIPE, text=True)
+        if result.stderr:
+            print(f"通知发送失败：{result.stderr}")
 
-    # 窗口置顶（跨平台兼容）
-    root.attributes('-topmost', True)
-
-    # 居中显示
-    window_width = 400
-    window_height = 180
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    x = (screen_width - window_width) // 2
-    y = (screen_height - window_height) // 2
-    root.geometry(f"{window_width}x{window_height}+{x}+{y}")
-
-    # 禁止调整大小
-    root.resizable(False, False)
-    root.configure(bg='#f0f0f0')
-
-    # 添加文本标签
-    label = ttk.Label(
-        root,
-        text=message,
-        wraplength=380,
-        font=("Arial", 14),
-        background='#f0f0f0'
-    )
-    label.pack(expand=True, padx=20, pady=20)
-
-    # 关键：子线程内运行主循环，关闭时销毁窗口
-    root.mainloop()
-
+    elif platform.system() == "Windows":  # Windows
+        pass
+        # Windows 通知（需win10+）
+        # from win10toast import ToastNotifier
+        # toaster = ToastNotifier()
+        # toaster.show_toast(
+        #     "置顶提示",
+        #     message,
+        #     duration=10,  # 显示10秒
+        #     threaded=True  # 非阻塞
+        # )
+    elif platform.system() == "Linux":  # Linux（GNOME/KDE）
+        subprocess.run(['notify-send', '置顶提示', message])
 
 

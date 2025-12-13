@@ -1,7 +1,6 @@
 import threading
 from datetime import datetime, timedelta
 import time
-from symbol import annassign
 from typing import List, Optional, Tuple
 
 import schedule
@@ -102,7 +101,7 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
         wait(futures, return_when=ALL_COMPLETED)
         executor.shutdown()  # 关闭线程池
         if len(result) > 0:
-            pop_up(''.join(result))
+            pop_up('\n'.join(result))
             print("\n" + "=" * 80)
             ans = '\n'.join(result)
             print(f"{ans} 满足条件")
