@@ -31,6 +31,6 @@ def pop_up(message: str):
         #     threaded=True  # 非阻塞
         # )
     elif platform.system() == "Linux":  # Linux（GNOME/KDE）
-        subprocess.run(['notify-send', '置顶提示', message])
-
+        pass
+        # subprocess.run(['notify-send', '置顶提示', message])
 
