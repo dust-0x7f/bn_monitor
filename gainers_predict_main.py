@@ -1,15 +1,18 @@
+import threading
 from datetime import datetime, timedelta
 import time
+from symbol import annassign
 from typing import List, Optional, Tuple
 
 import schedule
 
 from alert import pop_up
 from bn_tool import BNMonitor, KlineData, fail_symbols
+from qps_limiter import QPSLimiter
 from symbols import symbols
 
 bn_monitor = BNMonitor()
-POLL_INTERVAL = 3  # 定时任务间隔（分钟）
+POLL_INTERVAL = 1  # 定时任务间隔（分钟）
 LOOK_BACK_MINUTES = 90 # 回溯时间（当前时间前30分钟）
 KLINE_INTERVAL = 5  # K线周期（5分钟，与接口保持一致）
 KLINE_LIMIT = 10  # 获取的K线总数（最后3根+前7根）
@@ -76,57 +79,35 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
             volume_check |= 4
         if volume_check > 0 and  check_increase(klines_3min):
             result.append(specified_symbol)
-    else :
-        for symbol in symbols:
-            # 获取KlineData列表
-            klines_3min = bn_monitor.getSymbol3MinutesKlines(symbol, start_time_unix)
-            if not klines_3min:
-                print(f"⚠️ {symbol} 未获取到有效K线数据")
-                time.sleep(0.5)
-                continue
-
-            # 检查成交量条件，并获取详细分析
-            volume_check = 0
-            if check_sum_volume(klines_3min):
-                volume_check |= 1
-            elif check_avg_volume(klines_3min):
-                volume_check |= 2
-            elif check_last_k_volume(klines_3min):
-                volume_check |= 4
-
-
-            if volume_check > 0 and check_increase(klines_3min):
-                pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 20)
-                # 然后去check4小时线
-                klines_4_hours = bn_monitor.getSymbol4HoursKlines(symbol,pre_4hours_unix)
-                if klines_4_hours[-1].volume > sum(v.volume for v in klines_4_hours[:-1]) / (len(klines_4_hours) - 1):
-                    result.append(symbol)
-                    print("\n" + "=" * 80)
-                    print(f"{symbol} 满足条件")
-                    print("\n" + "=" * 80)
-
-                    # 非常重要
-                    if check_last_3min_klines_increase(klines_3min):
-                        pop_up(symbol)
-
-
-    # 过滤条件：满足条件的symbol数量不超过总数量的一半（保持原有逻辑）
-    if len(result) > 10 :
-        return
-
-    if len(result) > 0:
-        pop_up(','.join(result))
-    # 打印最终结果（包含详细成交量分析）
-    print("\n" + "=" * 80)
-
-    print(f"🚨 满足条件的合约列表（共 {len(result)} 个）：")
-    print("=" * 80)
-    if result:
-        for idx, analysis in enumerate(result, 1):
-            print(f"\n{idx}. 合约：{analysis}")
     else:
-        print("📭 暂无满足成交量条件的合约")
-    print("=" * 80 + "\n")
+        from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+        lock = threading.Lock()  # 线程锁，保证result安全
+        # 1. 创建所有线程
+        MAX_QPS = 10  # 限制≤10QPS
+        MAX_WORKERS = 10  # 线程池最大并发数（建议等于MAX_QPS）
+        qps_limiter = QPSLimiter(MAX_QPS)
+
+        # 1. 创建线程池（限制并发数）
+        executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+        # 2. 提交所有symbol的处理任务
+        futures = []
+        for symbol in symbols:
+            future = executor.submit(
+                process_symbol,
+                symbol, start_time_unix, result, lock, qps_limiter
+            )
+            futures.append(future)
+
+        # 3. 等待所有任务执行完毕（所有symbol处理完才停止）
+        wait(futures, return_when=ALL_COMPLETED)
+        executor.shutdown()  # 关闭线程池
+        if len(result) > 0:
+            pop_up(''.join(result))
+            print("\n" + "=" * 80)
+            ans = '\n'.join(result)
+            print(f"{ans} 满足条件")
+            print("\n" + "=" * 80)
+
 
 
 def check_last_k_volume(kines: List[KlineData]) -> bool:
@@ -171,14 +152,50 @@ def check_last_3min_klines_increase(klines: List[KlineData]) -> bool:
     return True
 
 
+def process_symbol(symbol, start_time_unix, result, lock, qps_limiter):
+    """单个symbol的处理逻辑（线程执行体）"""
+    try:
+        # 先获取QPS许可（核心：控制请求速率）
+        qps_limiter.acquire()
+
+        # 获取KlineData列表（完全复用你的代码）
+        klines_3min = bn_monitor.getSymbol3MinutesKlines(symbol, start_time_unix)
+        if not klines_3min:
+            print(f"⚠️ {symbol} 未获取到有效K线数据")
+            time.sleep(0.5)
+            return
+
+        # 检查成交量条件，并获取详细分析（完全复用）
+        volume_check = 0
+        if check_sum_volume(klines_3min):
+            volume_check |= 1
+        elif check_avg_volume(klines_3min):
+            volume_check |= 2
+        elif check_last_k_volume(klines_3min):
+            volume_check |= 4
+
+        if volume_check > 0 and check_increase(klines_3min):
+            # 再次控QPS（4小时线请求也计入QPS）
+            qps_limiter.acquire()
+            pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 20)
+            # 然后去check4小时线（完全复用）
+            klines_4_hours = bn_monitor.getSymbol4HoursKlines(symbol, pre_4hours_unix)
+            if klines_4_hours[-1].volume > sum(v.volume for v in klines_4_hours[:-1]) / (len(klines_4_hours) - 1):
+                # 线程安全添加结果
+                with lock:
+                    result.append(symbol)
+
+                # 非常重要（完全复用）
+                if check_last_3min_klines_increase(klines_3min):
+                    pop_up(symbol)
+    except Exception as e:
+        print(f"❌ {symbol} 处理异常：{e}")
 
 
 if __name__ == "__main__":
     # 1. 立即执行一次任务（可选）
     print("🚀 程序启动，立即执行一次任务...")
-    job( )
-    print(fail_symbols)
-
+    job()
     # 2. 配置定时任务：每POLL_INTERVAL分钟执行一次
     schedule.every(POLL_INTERVAL).minutes.do(job)
     print(f"\n⏱️  定时任务已配置：每{POLL_INTERVAL}分钟执行一次")
@@ -186,4 +203,5 @@ if __name__ == "__main__":
     # 3. 持续运行定时任务
     while True:
         schedule.run_pending()  # 检查是否有任务需要执行
+
 
