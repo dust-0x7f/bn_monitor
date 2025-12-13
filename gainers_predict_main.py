@@ -5,12 +5,11 @@ from typing import List, Optional, Tuple
 
 import schedule
 
-from alert import pop_up, send_beautiful_notification
+from alert import send_beautiful_notification
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
 from qps_limiter import QPSLimiter
-from strategy import check_sum_volume, check_avg_volume, check_last_k_volume, check_increase, \
-    check_last3_klines_increase
+from strategy import check_sum_volume, check_avg_volume, check_last_k_volume, check_increase
 from symbols import symbols
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
@@ -20,8 +19,8 @@ LOOK_BACK_MINUTES = 90 # 回溯时间（当前时间前30分钟）
 KLINE_INTERVAL = 3  # K线周期（5分钟，与接口保持一致）
 
 # 1. 创建所有线程
-MAX_QPS = 10  # 限制≤10QPS
-MAX_WORKERS = 10  # 线程池最大并发数（建议等于MAX_QPS）
+MAX_QPS = 9  # 限制≤10QPS
+MAX_WORKERS = 9  # 线程池最大并发数（建议等于MAX_QPS）
 # 1. 创建线程池（限制并发数）
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
@@ -42,6 +41,7 @@ def calculate_start_time(specified_time: Optional[str] = None, pre_delta_minutes
             target_time = datetime.strptime(specified_time, TIME_FORMAT)
         except ValueError:
             raise ValueError(f"❌ 指定时间格式错误！请使用 {TIME_FORMAT}（如 2025-11-19 22:00）")
+        target_time = target_time - timedelta(hours=delta_hours,minutes=delta_minutes)
     else:
         # 无指定时间：当前时间前30分钟
         target_time = datetime.now() - timedelta(hours=delta_hours,minutes=delta_minutes)
@@ -73,13 +73,13 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
 
         # 3. 等待所有任务执行完毕（所有symbol处理完才停止）
         wait(futures, return_when=ALL_COMPLETED)
-        if len(result) > 0:
-            result_symbols_str = ",".join(result)
-            send_beautiful_notification(message=f"二级告警{result_symbols_str}")
-            print("\n" + "=" * 80)
-            ans = '\n'.join(result)
-            print(f"{ans} 满足条件")
-            print("\n" + "=" * 80)
+    if len(result) > 0:
+        result_symbols_str = ",".join(result)
+        send_beautiful_notification(message=f"二级告警{result_symbols_str}")
+        print("\n" + "=" * 80)
+        ans = '\n'.join(result)
+        print(f"{ans} 满足条件")
+        print("\n" + "=" * 80)
 
 
 
@@ -123,11 +123,13 @@ def process_symbol(symbol, start_time_unix, result, lock, qps_limiter):
                 klines_4_hours = bn_monitor.getSymbolKlines(symbol, KlineInterval.HOUR_4.value,pre_4hours_unix)
                 if klines_4_hours[-1].volume > sum(v.volume for v in klines_4_hours[:-1]) / (len(klines_4_hours) - 1):
                     return True
+
                 # 线程安全添加结果
             if check1Minutes() and check4Hours():
                 with lock:
-                    result.append(symbol)
                     send_beautiful_notification(message=f"一级异常提醒:\n 合约: {symbol}")
+            result.append(symbol)
+
     except Exception as e:
         print(f"❌ {symbol} 处理异常：{e}")
 
@@ -136,11 +138,11 @@ def process_symbol(symbol, start_time_unix, result, lock, qps_limiter):
 
 if __name__ == "__main__":
     # 1. 立即执行一次任务（可选）
-    print("🚀 程序启动，立即执行一次任务...")
+    print("🚀 程序启动，立即执行一次任务...\n")
     job()
     # 2. 配置定时任务：每POLL_INTERVAL分钟执行一次
     schedule.every(POLL_INTERVAL).minutes.do(job)
-    print(f"\n⏱️  定时任务已配置：每{POLL_INTERVAL}分钟执行一次")
+    print(f"⏱️  定时任务已配置：每{POLL_INTERVAL}分钟执行一次")
 
     # 3. 持续运行定时任务
     while True:
