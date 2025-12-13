@@ -8,7 +8,6 @@ import schedule
 from alert import send_beautiful_notification
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
-from qps_limiter import QPSLimiter
 from strategy import check_sum_volume, check_avg_volume, check_last_k_volume, check_increase
 from symbols import symbols
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
@@ -19,8 +18,8 @@ LOOK_BACK_MINUTES = 90 # 回溯时间（当前时间前30分钟）
 KLINE_INTERVAL = 3  # K线周期（5分钟，与接口保持一致）
 
 # 1. 创建所有线程
-MAX_QPS = 9  # 限制≤10QPS
-MAX_WORKERS = 9  # 线程池最大并发数（建议等于MAX_QPS）
+MAX_QPS = 7  # 限制≤10QPS
+MAX_WORKERS = 7  # 线程池最大并发数（建议等于MAX_QPS）
 # 1. 创建线程池（限制并发数）
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
@@ -53,21 +52,20 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
     """定时任务核心逻辑：遍历symbols，获取K线数据"""
 
     # 计算startTimeUnix（支持指定时间）
-    start_time_unix = calculate_start_time(specified_time,pre_delta_minutes=90)
+    start_time_unix = calculate_start_time(specified_time,pre_delta_minutes=3 * 60)
     result = []  # 存储满足条件的symbol
     lock = threading.Lock()  # 线程锁，保证result安全
-    qps_limiter = QPSLimiter(MAX_QPS)
 
     # 2. 遍历所有symbol，逐个获取K线
     if specified_symbol:
-        process_symbol(specified_symbol,start_time_unix,result,lock,qps_limiter)
+        process_symbol(specified_symbol,start_time_unix,result,lock)
     else:
         # 2. 提交所有symbol的处理任务
         futures = []
         for symbol in symbols:
             future = executor.submit(
                 process_symbol,
-                symbol, start_time_unix, result, lock, qps_limiter
+                symbol, start_time_unix, result, lock
             )
             futures.append(future)
 
@@ -83,11 +81,10 @@ def job(specified_time: Optional[str] = None,specified_symbol: Optional[str] = N
 
 
 
-def process_symbol(symbol, start_time_unix, result, lock, qps_limiter):
+def process_symbol(symbol, start_time_unix, result, lock):
     """单个symbol的处理逻辑（线程执行体）"""
     try:
         # 先获取QPS许可（核心：控制请求速率）
-        qps_limiter.acquire()
 
         # 获取KlineData列表（完全复用你的代码）
         klines_3min = bn_monitor.getSymbolKlines(symbol,KlineInterval.MINUTE_3.value, start_time_unix)
@@ -105,9 +102,9 @@ def process_symbol(symbol, start_time_unix, result, lock, qps_limiter):
         elif check_last_k_volume(klines_3min):
             volume_check |= 4
 
+
         if volume_check > 0 and check_increase(klines_3min):
             # 再次控QPS（4小时线请求也计入QPS）
-            qps_limiter.acquire()
             pre_4hours_unix = calculate_start_time(pre_delta_hours=4 * 20)
             # 然后去check4小时线（完全复用）
 

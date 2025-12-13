@@ -2,24 +2,27 @@ from typing import List
 
 from bn_tool import KlineData
 
+# 最后一根线的交易量大于3倍的前面交易量的均值
+def check_last_k_volume_with(kines: List[KlineData]) -> bool:
+    return kines[-1].buy_volume > 3 * sum([k.buy_volume for k in kines[:-1]]) / len(kines[:-1])
 
 # 最后一根线的交易量大于5倍的前面交易量的均值
 def check_last_k_volume(kines: List[KlineData]) -> bool:
-    return kines[-1].volume > 5 * sum([k.volume for k in kines[:-1]]) / len(kines[:-1])
+    return kines[-1].buy_volume > 5 * sum([k.buy_volume for k in kines[:-1]]) / len(kines[:-1])
 
 # 最后三根交易量高于前面交易量的合
 def check_sum_volume(klines: List[KlineData]) -> bool:
     last_3_klines = klines[-3:]
     prev_klines = klines[:-3]
-    return sum([k.volume for k in last_3_klines]) >  sum([k.volume for k in prev_klines])
+    return sum([k.buy_volume for k in last_3_klines]) >  sum([k.buy_volume for k in prev_klines])
 
 # 最后5根交易量的均值，大于前面所有交易量的均值的3倍
 def check_avg_volume(klines: List[KlineData]) -> bool:
     # 分割最后3根和历史K线
-    last_3_klines = klines[-5:]
-    prev_klines = klines[:-5]
-    avg_last_3 = round(sum([k.volume for k in last_3_klines]) / 5, 6)
-    avg_prev = round(sum([k.volume for k in prev_klines]) / len(prev_klines), 6)
+    last_3_klines = klines[-3:]
+    prev_klines = klines[:-3]
+    avg_last_3 = round(sum([k.buy_volume for k in last_3_klines]) / 3, 6)
+    avg_prev = round(sum([k.buy_volume for k in prev_klines]) / len(prev_klines), 6)
     if avg_prev == 0:
         return False
     return avg_last_3 >= avg_prev * 3
