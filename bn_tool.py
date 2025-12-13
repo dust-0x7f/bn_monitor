@@ -1,6 +1,8 @@
+import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List
 
 from binance import BinanceAPIException
 from binance.client import Client  # 现货客户端
@@ -9,8 +11,11 @@ from binance.client import Client  # 现货客户端
 import time
 
 # 读取配置
-API_KEY = "h74Ci2vYD9ycl6zdO7wL2nhvfNImohYFmRaTjKg3Ze5MhVDWqg6MRJBsXrfoLBHg"
-SECRET_KEY = "hx1WIRMRQ0uy4u1jGLepItfeQn0YA2RdiHlEUY24jDf4ICIZR7tRBXsGf5FNFOCf"
+# API_KEY = "h74Ci2vYD9ycl6zdO7wL2nhvfNImohYFmRaTjKg3Ze5MhVDWqg6MRJBsXrfoLBHg"
+# SECRET_KEY = "hx1WIRMRQ0uy4u1jGLepItfeQn0YA2RdiHlEUY24jDf4ICIZR7tRBXsGf5FNFOCf"
+
+API_KEY = os.getenv("BINANCE_API_KEY")  # 自定义环境变量名，如BINANCE_API_KEY
+SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 
 @dataclass
@@ -59,10 +64,10 @@ class QPSLimiter:
 class BNMonitor:
     def __init__(self):
         self.client = Client(api_key=API_KEY, api_secret=SECRET_KEY, testnet=False)
-        self.qps_limiter = QPSLimiter(10)
+        self.qps_limiter = QPSLimiter(9)
 
 
-    def getSymbolKlines(self,symbol,internal,startTimeUnix):
+    def getSymbolKlines(self,symbol,internal,startTimeUnix) -> List[KlineData]:
         self.qps_limiter.acquire()
         kline_list = []
         try:
