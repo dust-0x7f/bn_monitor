@@ -10,6 +10,8 @@ from binance.client import Client  # 现货客户端
 
 import time
 
+from interal_enum import KlineInterval
+
 # 读取配置
 # API_KEY = "h74Ci2vYD9ycl6zdO7wL2nhvfNImohYFmRaTjKg3Ze5MhVDWqg6MRJBsXrfoLBHg"
 # SECRET_KEY = "hx1WIRMRQ0uy4u1jGLepItfeQn0YA2RdiHlEUY24jDf4ICIZR7tRBXsGf5FNFOCf"
@@ -64,7 +66,7 @@ class QPSLimiter:
 class BNMonitor:
     def __init__(self):
         self.client = Client(api_key=API_KEY, api_secret=SECRET_KEY, testnet=False)
-        self.qps_limiter = QPSLimiter(9)
+        self.qps_limiter = QPSLimiter(8)
 
 
     def getSymbolKlines(self,symbol,internal,startTimeUnix) -> List[KlineData]:
@@ -111,7 +113,7 @@ class BNMonitor:
         return kline_list
 
     def getTargetSymbols(self):
-        resp = self.client.get_exchange_info()
+        resp = self.client.futures_exchange_info()
         result = []
         for item in resp["symbols"]:
             if item["status"] == "TRADING":
