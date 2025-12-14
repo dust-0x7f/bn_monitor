@@ -85,7 +85,7 @@ def backtest_symbol(symbol: str, end_time_str: str):
     print(f"✅ 回测完成，结果已保存: {csv_file}")
 
 if __name__ == "__main__":
-    symbol = "FOLKSUSDT"
-    end = "2025-12-13 16:30"
+    symbol = "NIGHTUSDT"
+    end = "2025-12-14 12:00"
 
     backtest_symbol(symbol, end)
