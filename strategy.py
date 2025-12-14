@@ -97,141 +97,73 @@ def calculate_24_rsi_with_talib(kline_list: List[KlineData]) -> List[Optional[fl
 
 
 
+def price_range_ratio(k: KlineData):
+    return (k.high_price - k.low_price) / k.close_price if k.close_price != 0 else 0
 
-def is_real_volume_breakout_5m(klines: List[KlineData]) -> bool:
+
+# -----------------------------
+# 吸筹判断
+# -----------------------------
+def is_accumulation_phase_5m(klines: List[KlineData], window_len=40) -> bool:
     """
-    判断是否出现：完整吸筹后的放量启动（5min）
-    需要 >= 80 根 K
+    判断最近 window_len 根 K 线是否处于吸筹阶段
     """
-    if len(klines) < 80:
+    if len(klines) < window_len:
         return False
 
-    silent = klines[-80:-50]   # 静默期（30）
-    accum  = klines[-50:-25]   # 吸筹期（25）
-    rotate = klines[-25:-10]   # 换手期（15）
-    confirm = klines[-10:]     # 启动确认（10）
+    window = klines[-window_len:]
 
-    # -----------------------------
-    # 1️⃣ 静默期：低量 + 低波动
-    # -----------------------------
-    silent_vol = np.mean([k.volume for k in silent])
-    silent_range = np.mean([
-        (k.high_price - k.low_price) / k.close_price
-        for k in silent
-    ])
-
-    if silent_range > 0.01:
-        return False  # 早期就很活跃，排除
-
-    # -----------------------------
-    # 2️⃣ 吸筹期：量缓慢抬升
-    # -----------------------------
-    accum_vols = [k.volume for k in accum]
-    accum_vol_up = np.mean(accum_vols[-10:]) > np.mean(accum_vols[:10]) * 1.3
-
-    if not accum_vol_up:
+    # 1️⃣ 价格波动小（横盘）
+    avg_range = np.mean([price_range_ratio(k) for k in window])
+    if avg_range > 0.015:  # 可调，横盘阈值
         return False
 
-    # -----------------------------
-    # 3️⃣ 换手期：高量但价格不乱跑
-    # -----------------------------
-    rotate_vol = np.mean([k.volume for k in rotate])
-    rotate_range = np.mean([
-        (k.high_price - k.low_price) / k.close_price
-        for k in rotate
-    ])
-
-    if rotate_vol < silent_vol * 2:
+    # 2️⃣ 成交量逐步放大
+    mid = window_len // 2
+    vol_first = np.mean([k.volume for k in window[:mid]])
+    vol_last  = np.mean([k.volume for k in window[mid:]])
+    if vol_last < vol_first * 1.2:
         return False
 
-    if rotate_range > 0.02:
-        return False  # 换手期不该剧烈波动
-
-    # -----------------------------
-    # 4️⃣ 启动确认：量价共振
-    # -----------------------------
-    confirm_vols = [k.volume for k in confirm]
-    confirm_closes = [k.close_price for k in confirm]
-
-    price_up = confirm_closes[-1] > confirm_closes[0]
-    vol_spike = confirm_vols[-1] > np.mean(confirm_vols) * 1.3
-
-    last = confirm[-1]
-    bullish = last.close_price > last.open_price
-    strong_buy = last.buy_volume / last.volume > 0.6
-
-    if not all([price_up, vol_spike, bullish, strong_buy]):
+    # 3️⃣ 主动买入占比略大于50%
+    buy_ratio = np.mean([k.buy_volume / k.volume for k in window if k.volume > 0])
+    if buy_ratio < 0.52:
         return False
 
     return True
 
 
-
-def is_accumulation_phase_5m(klines: List[KlineData]) -> bool:
-    ACCUM_WINDOW = 40  # 看最近 40 根 ≈ 3.3h
-    SILENT_CHECK = 20
-    ACCUM_CHECK = 20
+# -----------------------------
+# 爆发判断
+# -----------------------------
+def is_real_volume_breakout_5m(klines: List[KlineData], window_len=80) -> bool:
     """
-    判断是否处于吸筹期（非启动）
+    判断最近 window_len 根 K 线是否爆发
     """
-    if len(klines) < ACCUM_WINDOW:
+    if len(klines) < window_len:
         return False
 
-    silent = klines[-ACCUM_WINDOW:-ACCUM_CHECK]   # 前 20
-    accum = klines[-ACCUM_CHECK:]                  # 后 20
+    window = klines[-window_len:]
 
-    # -----------------------
-    # 1️⃣ 静默期确认
-    # -----------------------
-    silent_vol = np.mean([k.volume for k in silent])
-    silent_range = np.mean([
-        (k.high_price - k.low_price) / k.close_price
-        for k in silent
-    ])
-
-    if silent_range > 0.012:
+    # 前期静默期（前半段）
+    half = window_len // 2
+    silent_window = window[:half]
+    avg_range_silent = np.mean([price_range_ratio(k) for k in silent_window])
+    avg_vol_silent   = np.mean([k.volume for k in silent_window])
+    if avg_range_silent > 0.01:
         return False
 
-    # -----------------------
-    # 2️⃣ 成交量抬升（慢）
-    # -----------------------
-    vol_first = np.mean([k.volume for k in accum[:10]])
-    vol_last = np.mean([k.volume for k in accum[-10:]])
-
-    if vol_last < vol_first * 1.2:
+    # 后半段最近吸筹期
+    recent_window = window[half:]
+    vol_ratio = np.mean([k.volume for k in recent_window]) / avg_vol_silent
+    if vol_ratio < 2.0:  # 放大 2 倍以上才算爆发
         return False
 
-    # -----------------------
-    # 3️⃣ 价格稳定
-    # -----------------------
-    start = accum[0].close_price
-    end = accum[-1].close_price
-    price_change = abs(end - start) / start
-
-    if price_change > 0.02:
+    # 最近几根 K 线价格上涨且买入占比高
+    last_k = recent_window[-1]
+    if last_k.close_price <= last_k.open_price:
         return False
-
-    # -----------------------
-    # 4️⃣ 下影线承接
-    # -----------------------
-    lower_wick_count = 0
-    for k in accum:
-        lower = min(k.open_price, k.close_price) - k.low_price
-        upper = k.high_price - max(k.open_price, k.close_price)
-        if lower > upper:
-            lower_wick_count += 1
-
-    if lower_wick_count < len(accum) * 0.5:
-        return False
-
-    # -----------------------
-    # 5️⃣ 主动买入占比改善
-    # -----------------------
-    buy_ratio = np.mean([
-        k.buy_volume / k.volume for k in accum if k.volume > 0
-    ])
-
-    if buy_ratio < 0.52:
+    if last_k.buy_volume / last_k.volume < 0.6:
         return False
 
     return True
