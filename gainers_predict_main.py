@@ -45,7 +45,7 @@ def calculate_start_time(specified_time: Optional[str] = None, pre_delta_minutes
     return int(target_time.timestamp() * 1000)
 
 
-def job(specified_time: Optional[str] = None, specified_symbol: Optional[str] = None):
+def job(specified_symbol: Optional[str] = None):
     """定时任务核心逻辑：遍历symbols，获取K线数据"""
 
     # 计算startTimeUnix（支持指定时间）
