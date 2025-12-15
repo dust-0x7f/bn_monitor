@@ -1,6 +1,7 @@
 # monitor.py
 import time
 import threading
+from datetime import datetime, timedelta
 from typing import Optional
 
 import schedule
@@ -54,15 +55,25 @@ def init_warmup(specific_symbol:Optional[str] = None):
 
     print("✅ warmup done")
 
+def calculate_start_time(hours: int) -> int:
+    t = datetime.now() - timedelta(hours=hours)
+    return int(t.timestamp() * 1000)
+
+
 
 def process_symbol(symbol):
-    runtime = RUNTIME[symbol]
-    kl = bn.getSymbolKlines(symbol, KlineInterval.MINUTE_5.value, runtime.last_seen_ms)
-    if not kl or len(kl) < 2:
-        return
 
-    # 只取新增的 bar
-    new_bars = [k for k in kl if k.open_time > runtime.last_seen_ms]
+    runtime = RUNTIME.get(symbol)
+    if runtime:
+        kl = bn.getSymbolKlines(symbol, KlineInterval.MINUTE_5.value, runtime.last_seen_ms)
+        if not kl or len(kl) < 2:
+            return
+
+        # 只取新增的 bar
+        new_bars = [k for k in kl if k.open_time > runtime.last_seen_ms]
+    else:
+        kl = bn.getSymbolKlines(symbol, KlineInterval.MINUTE_5.value, calculate_start_time(16))
+        new_bars = kl
     for bar in new_bars:
         view = kl[: kl.index(bar)+1]
         events = step_symbol(
