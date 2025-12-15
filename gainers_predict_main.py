@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from datetime import datetime, timedelta
 
 from alert import send_beautiful_notification
-from strategy import detect_phase_event_5m
+from strategy import detect_phase_event_5m, detect_phase_event_5m_at_time
 from state import StateManager, SignalState
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
@@ -37,7 +37,7 @@ def calculate_start_time(hours: int) -> int:
 
 def process_symbol(symbol: str):
     try:
-        start_time = calculate_start_time(20)
+        start_time = calculate_start_time(24)
         klines = bn_monitor.getSymbolKlines(
             symbol,
             KlineInterval.MINUTE_5.value,
@@ -50,7 +50,7 @@ def process_symbol(symbol: str):
         # 1️⃣ 爆发检测
         # -----------------------------
 
-        event, info = detect_phase_event_5m(klines)
+        event, info = detect_phase_event_5m_at_time(klines,time_str="2025-12-15 18:40")
         if event == "ACCUM":
              # 告警：进入吸筹（info 里有 accum_start/end）
             print(f"{symbol}吸筹")
@@ -59,6 +59,7 @@ def process_symbol(symbol: str):
             break_out_time = datetime.fromtimestamp(info['breakout_open_time'] / 1000).strftime("%Y-%m-%d %H:%M")
             if global_breakout_symbol_cache.get(symbol) != break_out_time:
                 global_breakout_symbol_cache[symbol] = break_out_time
+                print(f"🚀 爆发确认合约: {symbol}爆发时间点:{break_out_time}\n")
                 send_beautiful_notification(
                     f"🚀 爆发确认\n合约: {symbol}\n爆发时间点:{break_out_time}",
                     subtitle="BREAKOUT"

@@ -1,6 +1,11 @@
 from dataclasses import dataclass
+from datetime import timezone, datetime
 from typing import List, Dict, Tuple, Optional
+from zoneinfo import ZoneInfo
+
 import numpy as np
+
+from util import find_end_idx_by_time
 
 
 # ---------- 基础特征 ----------
@@ -207,6 +212,45 @@ def _is_accum_segment(
     return True, info
 
 
+def str_to_ms(s: str) -> int:
+    dt = datetime.strptime(s, "%Y-%m-%d %H:%M").replace()
+    return int(dt.timestamp() * 1000)
+
+def detect_phase_event_5m_at_time(
+    klines: list,
+    time_str: str,
+    lookback_len: int = 240,
+):
+    # ① 时间点 → ms
+    t_ms = str_to_ms(time_str)
+
+    # ② 找评估边界（只用过去）
+    end_idx = find_end_idx_by_time(klines, t_ms)
+    if end_idx < 0:
+        return "NONE", {"reason": "time_before_first_kline"}
+
+    # ③ 截断数据，防未来
+    data = klines[:end_idx + 1]
+
+    # ④ 直接调用你已经有的逻辑
+    # 这里是真实代码，不是 ...
+    return detect_phase_event_5m(
+        data,
+        lookback_len=lookback_len,
+        # 下面这些参数你要改就直接写
+        min_silent=50,
+        scan_win=30,
+        step=2,
+        quiet_p90=0.015,
+        quiet_max=0.04,
+        forbid_down_slope=-0.0008,
+        accum_min_len=20,
+        accum_max_len=120,
+        buy_ratio_min=0.52,
+        break_eps=0.003,
+        hold_need=False,
+    )
+
 # ---------- 统一：返回 ACCUM 或 BREAKOUT ----------
 def detect_phase_event_5m(
     klines: List,
@@ -225,7 +269,7 @@ def detect_phase_event_5m(
     buy_ratio_min: float = 0.52,
     # 突破/爆发
     break_eps: float = 0.003,
-    hold_need: bool = False,       # 你要“时间点告警”，建议先 False；要更稳再 True
+    hold_need: bool = True,       # 你要“时间点告警”，建议先 False；要更稳再 True
     hold_eps: float = 0.0015,
     max_wick: float = 0.55,
     min_body: float = 0.30,
