@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from datetime import datetime, timedelta
 
 from alert import send_beautiful_notification
-from strategy import is_real_volume_breakout_5m, is_accumulation_phase_5m
+from strategy import is_accumulation_phase_5m, is_real_volume_breakout_5m_strict
 from state import StateManager, SignalState
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
@@ -19,7 +19,7 @@ bn_monitor = BNMonitor()
 state_manager = StateManager()
 
 MAX_WORKERS = 10
-POLL_INTERVAL = 1  # 分钟
+POLL_INTERVAL = 3  # 分钟
 
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
@@ -33,7 +33,7 @@ def calculate_start_time(hours: int) -> int:
 
 def process_symbol(symbol: str):
     try:
-        start_time = calculate_start_time(8)
+        start_time = calculate_start_time(20)
         klines = bn_monitor.getSymbolKlines(
             symbol,
             KlineInterval.MINUTE_5.value,
@@ -45,7 +45,8 @@ def process_symbol(symbol: str):
         # -----------------------------
         # 1️⃣ 爆发检测
         # -----------------------------
-        if is_real_volume_breakout_5m(klines):
+        yes, _ = is_real_volume_breakout_5m_strict(klines)
+        if yes:
             info = state_manager.update(symbol, SignalState.BREAKOUT)
             # 只有从 ACCUM 进入 BREAKOUT 才告警
             if info['from_state'] == SignalState.ACCUM:
