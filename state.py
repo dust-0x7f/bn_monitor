@@ -119,3 +119,31 @@ class StateManager:
         with self._lock:
             return self._state.get(symbol, SignalState.NONE)
 
+
+
+class SymbolRuntimeState:
+    """
+    单 symbol 的运行时状态（可由 replay 完全恢复）
+    """
+    def __init__(self):
+        self.state = SignalState.NONE
+        self.accum_start_ms = None
+        self.pending = None              # dict or None
+        self.last_alert_ms = None         # 防重复报警
+        self.last_seen_ms = None          # 最新处理的 bar
+
+    def enter_accum(self, now_ms):
+        if self.state != SignalState.ACCUM:
+            self.state = SignalState.ACCUM
+            self.accum_start_ms = now_ms
+
+    def exit_accum(self):
+        self.accum_start_ms = None
+
+    def enter_breakout(self, now_ms):
+        self.state = SignalState.BREAKOUT
+        self.exit_accum()
+
+    def enter_none(self):
+        self.state = SignalState.NONE
+        self.exit_accum()
