@@ -266,11 +266,17 @@ def candle_body(k):
 def upper_wick(k):
     return k.high_price - max(k.open_price, k.close_price)
 
-def trap_score_after_breakout(bars_after: list, box_top: float) -> Tuple[float, dict]:
+from typing import Tuple, Dict
+
+def trap_score_after_breakout(
+    bars_after: list,
+    box_top: float,
+    eps: float = 0.001
+) -> Tuple[float, Dict]:
     """
     bars_after: 突破K线后的若干根K线（至少2根，最好3根）
-    box_top: 箱体上沿（breakout 之前的静默箱体上沿）
-    返回 (trap_score, detail)
+    box_top: 箱体上沿
+    eps: 回踩容忍比例（建议传 strict 里的 break_eps）
     """
     detail = {}
     score = 0.0
@@ -278,51 +284,54 @@ def trap_score_after_breakout(bars_after: list, box_top: float) -> Tuple[float, 
     if len(bars_after) < 2:
         return 0.0, {"reason": "need_more_bars"}
 
-    b1 = bars_after[0]  # 突破后的第1根
-    b2 = bars_after[1]  # 突破后的第2根
-    body1 = candle_body(b1)
-    body2 = candle_body(b2)
-    vol1 = b1.volume
-    vol2 = b2.volume
+    b1 = bars_after[0]
+    b2 = bars_after[1]
 
-    # ① 第二根疲软（实体明显变小）
+    body1 = abs(b1.close_price - b1.open_price)
+    body2 = abs(b2.close_price - b2.open_price)
+    vol1 = float(b1.volume)
+    vol2 = float(b2.volume)
+
+    # ① 第二根疲软
     if body2 < body1 * 0.5:
         score += 30
         detail["weak_2nd_body"] = True
 
-    # ② 单峰成交量（第一根爆，后面塌）
+    # ② 单峰量
     if vol2 < vol1 * 0.7:
         score += 20
         detail["single_peak_vol"] = True
 
-    # ③ 突破后不愿远离箱体（2根都贴着箱体）
+    # ③ 不愿远离箱体
     max_close = max(b1.close_price, b2.close_price)
     if (max_close - box_top) / max(1e-12, box_top) < 0.005:
         score += 20
         detail["no_extension"] = True
 
-    # ④ 回踩跌回箱体（死刑）
+    # ④ 回踩明显跌回箱体（用 eps 容忍）
     min_low = min(b1.low_price, b2.low_price)
-    if min_low < box_top:
+    if min_low < box_top * (1.0 - eps):
         score += 40
         detail["back_into_box"] = True
 
-    # ⑤ 上影线过长（派发/冲高回落）
-    # 这里做温和惩罚：如果两根里任意一根上影线很长
-    wick1 = upper_wick(b1)
-    wick2 = upper_wick(b2)
-    rng1 = max(1e-12, b1.high_price - b1.low_price)
-    rng2 = max(1e-12, b2.high_price - b2.low_price)
-    if wick1 / rng1 > 0.6 or wick2 / rng2 > 0.6:
+    # ⑤ 上影线过长
+    def upper_wick_ratio(k):
+        rng = max(1e-12, k.high_price - k.low_price)
+        upper = k.high_price - max(k.open_price, k.close_price)
+        return upper / rng
+
+    if upper_wick_ratio(b1) > 0.6 or upper_wick_ratio(b2) > 0.6:
         score += 15
         detail["long_upper_wick"] = True
 
-    # ⑥ buy_ratio 明显下降（你如果愿意也可以加）
+    # ⑥ buy_ratio 下降
     def buy_ratio(k):
         return (k.buy_volume / k.volume) if k.volume > 0 else 0.0
+
     if buy_ratio(b2) < buy_ratio(b1) * 0.85:
         score += 15
         detail["buy_ratio_drop"] = True
 
     detail["trap_score"] = score
     return score, detail
+

@@ -44,8 +44,8 @@ PENDING = {}  # symbol -> dict
 PENDING_LOCK = threading.Lock()
 
 # 参数（先用这套，后面根据实际触发量再调）
-SCORE_MIN = 85          # strict 通过后，score 低于该值不进入候选
-TRAP_MAX = 35           # trap_score 高于该值视为诱多，不报警
+SCORE_MIN = 80          # strict 通过后，score 低于该值不进入候选
+TRAP_MAX = 70           # trap_score 高于该值视为诱多，不报警
 CONFIRM_BARS = 2        # 候选后至少等 2 根 5m bar 再确认
 PENDING_TTL_BARS = 6    # 候选最多挂 6 根（30分钟）不确认就丢
 BAR_MS = 5 * 60 * 1000

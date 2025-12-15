@@ -121,7 +121,6 @@ class BNMonitor:
                 f"💡 建议：检查网络连接、延长超时时间，或缩小请求时间范围\n"
                 f"{'=' * 80}\n"
             )
-            fail_symbols.append(symbol)
             print(error_msg)
         except Exception as e:
             # 兜底：捕获其他未预料到的异常（可选，避免程序崩溃）
@@ -133,7 +132,6 @@ class BNMonitor:
                 f"💬 异常信息：{str(e)}\n"
                 f"{'=' * 80}\n"
             )
-            fail_symbols.append(symbol)
             print(error_msg)
 
         return kline_list
