@@ -236,19 +236,6 @@ def detect_phase_event_5m_at_time(
     # 这里是真实代码，不是 ...
     return detect_phase_event_5m(
         data,
-        lookback_len=lookback_len,
-        # 下面这些参数你要改就直接写
-        min_silent=50,
-        scan_win=30,
-        step=2,
-        quiet_p90=0.015,
-        quiet_max=0.04,
-        forbid_down_slope=-0.0008,
-        accum_min_len=20,
-        accum_max_len=120,
-        buy_ratio_min=0.52,
-        break_eps=0.003,
-        hold_need=False,
     )
 
 # ---------- 统一：返回 ACCUM 或 BREAKOUT ----------

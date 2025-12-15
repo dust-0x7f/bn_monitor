@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from datetime import datetime, timedelta
 
 from alert import send_beautiful_notification
-from strategy import detect_phase_event_5m, detect_phase_event_5m_at_time
+from strategy import detect_phase_event_5m, detect_phase_event_5m_at_time, str_to_ms
 from state import StateManager, SignalState
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
@@ -37,11 +37,15 @@ def calculate_start_time(hours: int) -> int:
 
 def process_symbol(symbol: str):
     try:
-        start_time = calculate_start_time(24)
+        start_time = calculate_start_time(30)
+        # end_time = calculate_start_time()
+
+        # start_time = str_to_ms("2025-12-14 10:00")
+        # end_time = str_to_ms("2025-12-15 9:50")
         klines = bn_monitor.getSymbolKlines(
             symbol,
             KlineInterval.MINUTE_5.value,
-            start_time
+            start_time,
         )
         if not klines:
             return
@@ -50,20 +54,30 @@ def process_symbol(symbol: str):
         # 1️⃣ 爆发检测
         # -----------------------------
 
-        event, info = detect_phase_event_5m_at_time(klines,time_str="2025-12-15 18:40")
+        # event, info = detect_phase_event_5m_at_time(klines,time_str="2025-12-15 18:40")
+        event, info = detect_phase_event_5m(klines)
         if event == "ACCUM":
              # 告警：进入吸筹（info 里有 accum_start/end）
             print(f"{symbol}吸筹")
         elif event == "BREAKOUT":
+            def now_ms():
+                return int(time.time() * 1000)
+            now = now_ms()
+
+            breakout_open_time = int(info["breakout_open_time"])  # ms
+            now = now_ms()
+
+            # ❶ 时间窗口过滤：不是“新发生”的，直接忽略
+            ALERT_WINDOW_MS = 5 * 60 * 1000  # 5 分钟
+            if now - breakout_open_time > ALERT_WINDOW_MS:
+                return
              # 告警：发生突破（info["breakout_open_time"]）
             break_out_time = datetime.fromtimestamp(info['breakout_open_time'] / 1000).strftime("%Y-%m-%d %H:%M")
-            if global_breakout_symbol_cache.get(symbol) != break_out_time:
-                global_breakout_symbol_cache[symbol] = break_out_time
-                print(f"🚀 爆发确认合约: {symbol}爆发时间点:{break_out_time}\n")
-                send_beautiful_notification(
-                    f"🚀 爆发确认\n合约: {symbol}\n爆发时间点:{break_out_time}",
-                    subtitle="BREAKOUT"
-                )
+            print(f"🚀 爆发确认合约: {symbol}爆发时间点:{break_out_time}\n")
+            send_beautiful_notification(
+                f"🚀 爆发确认\n合约: {symbol}\n爆发时间点:{break_out_time}",
+                subtitle="BREAKOUT"
+            )
 
 
     except Exception as e:
