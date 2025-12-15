@@ -58,7 +58,8 @@ def process_symbol(symbol: str):
         event, info = detect_phase_event_5m(klines)
         if event == "ACCUM":
              # 告警：进入吸筹（info 里有 accum_start/end）
-            print(f"{symbol}吸筹")
+            # print(f"{symbol}吸筹")
+            pass
         elif event == "BREAKOUT":
             def now_ms():
                 return int(time.time() * 1000)
