@@ -1,18 +1,24 @@
 import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List
 
 from binance import BinanceAPIException
-from dotenv import load_dotenv
 from binance.client import Client  # 现货客户端
 
 
+import time
+
+from interal_enum import KlineInterval
+
 # 读取配置
-API_KEY = "h74Ci2vYD9ycl6zdO7wL2nhvfNImohYFmRaTjKg3Ze5MhVDWqg6MRJBsXrfoLBHg"
-SECRET_KEY = "hx1WIRMRQ0uy4u1jGLepItfeQn0YA2RdiHlEUY24jDf4ICIZR7tRBXsGf5FNFOCf"
+# API_KEY = "h74Ci2vYD9ycl6zdO7wL2nhvfNImohYFmRaTjKg3Ze5MhVDWqg6MRJBsXrfoLBHg"
+# SECRET_KEY = "hx1WIRMRQ0uy4u1jGLepItfeQn0YA2RdiHlEUY24jDf4ICIZR7tRBXsGf5FNFOCf"
 
+API_KEY = os.getenv("BINANCE_API_KEY")  # 自定义环境变量名，如BINANCE_API_KEY
+SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
-fail_symbols = []
 
 @dataclass
 class KlineData:
@@ -38,18 +44,36 @@ class KlineData:
         from datetime import datetime
         return datetime.fromtimestamp(self.close_time / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
+class QPSLimiter:
+    def __init__(self, max_qps: int):
+        self.max_qps = max_qps
+        self.interval = 1.0 / max_qps  # 每次请求的最小间隔（秒）
+        self.last_request_time = 0.0
+        self.lock = threading.Lock()
+
+    def acquire(self):
+        """获取请求许可，确保QPS不超限"""
+        with self.lock:
+            current_time = time.time()
+            # 计算需要等待的时间（确保两次请求间隔≥1/QPS）
+            sleep_time = self.interval - (current_time - self.last_request_time)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            # 更新最后一次请求时间
+            self.last_request_time = time.time()
+
 
 class BNMonitor:
     def __init__(self):
         self.client = Client(api_key=API_KEY, api_secret=SECRET_KEY, testnet=False)
+        self.qps_limiter = QPSLimiter(8)
 
-    def getServerTime(self):
-        return self.client.get_server_time()
 
-    def getSymbol5MinutesKlines(self,symbol,startTimeUnix):
+    def getSymbolKlines(self,symbol,internal,startTimeUnix) -> List[KlineData]:
+        self.qps_limiter.acquire()
         kline_list = []
         try:
-            resp = self.client.futures_klines(symbol = symbol,interval = "5m",startTime = startTimeUnix)
+            resp = self.client.futures_klines(symbol=symbol, interval=internal, startTime=startTimeUnix)
             for kline in resp:
                 data = KlineData(
                     open_time=kline[0],
@@ -73,6 +97,7 @@ class BNMonitor:
                     f"⚠️ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 429限流警告\n"
                     f"{'=' * 80}\n"
                 )
+                print(error_msg)
             else:
                 error_msg = (
                     f"\n{'=' * 80}\n"
@@ -83,7 +108,6 @@ class BNMonitor:
                     f"💬 异常信息：{str(e)}\n"
                     f"{'=' * 80}\n"
                 )
-                fail_symbols.append(symbol)
                 print(error_msg)
 
         return kline_list
@@ -92,5 +116,9 @@ class BNMonitor:
         resp = self.client.futures_exchange_info()
         result = []
         for item in resp["symbols"]:
-            result.append(item["pair"])
+            if item["status"] == "TRADING":
+                result.append(item["symbol"])
         print(result)
+
+
+

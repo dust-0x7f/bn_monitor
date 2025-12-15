@@ -1,43 +1,39 @@
-import tkinter as tk
-from tkinter import ttk
+import subprocess
+from typing import Optional
 
 
-def show_topmost_popup(message: str):
-    # 创建主窗口
-    root = tk.Tk()
-    root.title("置顶提示")
+def send_beautiful_notification(message: str, subtitle: Optional[str] = None):
+    title = "交易提醒 🚨"
+    subtitle = subtitle or "策略告警"
 
-    # 关键：设置窗口置顶（macOS 兼容）
-    root.attributes('-topmost', True)
+    safe_title = title.replace('"', '\\"').replace('\n', '\\n')
+    safe_subtitle = subtitle.replace('"', '\\"').replace('\n', '\\n')
+    safe_message = message.replace('"', '\\"').replace('\n', '\\n')
 
-    # 设置窗口大小和位置（居中显示）
-    window_width = 400
-    window_height = 180
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    x = (screen_width - window_width) // 2
-    y = (screen_height - window_height) // 2
-    root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    cmd = f'''
+        osascript -e '
+            tell application "System Events"
+                display notification "{safe_message}" \
+                with title "{safe_title}" subtitle "{safe_subtitle}" sound name "Glass"
+            end tell
+        '
+    '''
 
-    # 禁止调整窗口大小
-    root.resizable(False, False)
+    try:
+        subprocess.run(
+            cmd,
+            shell=True,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5
+        )
+    except Exception as e:
+        print(f"❌ 通知失败: {e}")
 
-    # 设置窗口样式（可选，增强美观度）
-    root.configure(bg='#f0f0f0')
 
-    # 添加文本内容（自动换行）
-    label = ttk.Label(
-        root,
-        text=message,
-        wraplength=380,  # 文本换行宽度
-        font=("Arial", 14),
-        background='#f0f0f0'
+# 用法示例
+if __name__ == "__main__":
+    send_beautiful_notification(
+        subtitle="4小时K线震荡判定",
+        message="判定结果：无通道震荡行情\n价格区间：95.23 ~ 104.87\n建议：区间高抛低吸"
     )
-    label.pack(expand=True, padx=20, pady=20)
-
-
-
-    # 启动主循环
-    root.mainloop()
-
-
