@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from datetime import datetime, timedelta
 
 from alert import send_beautiful_notification
-from strategy import is_accumulation_phase_5m, is_real_volume_breakout_5m_strict
+from strategy import detect_phase_event_5m
 from state import StateManager, SignalState
 from bn_tool import BNMonitor
 from interal_enum import KlineInterval
@@ -17,6 +17,10 @@ from symbols import symbols
 # -----------------------------
 bn_monitor = BNMonitor()
 state_manager = StateManager()
+
+global_breakout_symbol_cache = {
+
+}
 
 MAX_WORKERS = 10
 POLL_INTERVAL = 3  # 分钟
@@ -45,30 +49,21 @@ def process_symbol(symbol: str):
         # -----------------------------
         # 1️⃣ 爆发检测
         # -----------------------------
-        yes, _ = is_real_volume_breakout_5m_strict(klines)
-        if yes:
-            info = state_manager.update(symbol, SignalState.BREAKOUT)
-            # 只有从 ACCUM 进入 BREAKOUT 才告警
-            if info['from_state'] == SignalState.ACCUM:
-                duration_sec = info['accum_duration']
-                duration_str = f"{duration_sec/60:.1f} 分钟"
+
+        event, info = detect_phase_event_5m(klines)
+        if event == "ACCUM":
+             # 告警：进入吸筹（info 里有 accum_start/end）
+            print(f"{symbol}吸筹")
+        elif event == "BREAKOUT":
+             # 告警：发生突破（info["breakout_open_time"]）
+            break_out_time = datetime.fromtimestamp(info['breakout_open_time'] / 1000).strftime("%Y-%m-%d %H:%M")
+            if global_breakout_symbol_cache.get(symbol) != break_out_time:
+                global_breakout_symbol_cache[symbol] = break_out_time
                 send_beautiful_notification(
-                    f"🚀 爆发确认\n合约: {symbol}\n吸筹时长: {duration_str}",
+                    f"🚀 爆发确认\n合约: {symbol}\n爆发时间点:{break_out_time}",
                     subtitle="BREAKOUT"
                 )
-            return
 
-        # -----------------------------
-        # 2️⃣ 吸筹期归档（不告警）
-        # -----------------------------
-        if is_accumulation_phase_5m(klines):
-            state_manager.update(symbol, SignalState.ACCUM)
-            return
-
-        # -----------------------------
-        # 3️⃣ NONE 状态
-        # -----------------------------
-        state_manager.update(symbol, SignalState.NONE)
 
     except Exception as e:
         print(f"❌ {symbol} 异常: {e}")
