@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List
 
+import urllib3
 from binance import BinanceAPIException
 from binance.client import Client  # 现货客户端
-
+from requests import RequestException
 
 import time
 
@@ -109,6 +110,31 @@ class BNMonitor:
                     f"{'=' * 80}\n"
                 )
                 print(error_msg)
+        except (urllib3.exceptions.ReadTimeoutError, RequestException) as e:
+            # 新增：捕获网络相关异常（超时、连接失败等）
+            error_msg = (
+                f"\n{'=' * 80}\n"
+                f"⏳ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 网络请求超时/连接错误\n"
+                f"📋 请求参数：{symbol}\n"
+                f"🔍 异常类型：{type(e).__name__}\n"
+                f"💬 异常信息：{str(e)}\n"
+                f"💡 建议：检查网络连接、延长超时时间，或缩小请求时间范围\n"
+                f"{'=' * 80}\n"
+            )
+            fail_symbols.append(symbol)
+            print(error_msg)
+        except Exception as e:
+            # 兜底：捕获其他未预料到的异常（可选，避免程序崩溃）
+            error_msg = (
+                f"\n{'=' * 80}\n"
+                f"❌ 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】获取K线失败 - 未知错误\n"
+                f"📋 请求参数：{symbol}\n"
+                f"🔍 异常类型：{type(e).__name__}\n"
+                f"💬 异常信息：{str(e)}\n"
+                f"{'=' * 80}\n"
+            )
+            fail_symbols.append(symbol)
+            print(error_msg)
 
         return kline_list
 
