@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from datetime import timezone, datetime
 from typing import List, Dict, Tuple, Optional
-from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -256,9 +255,9 @@ def detect_phase_event_5m(
     buy_ratio_min: float = 0.52,
     # 突破/爆发
     break_eps: float = 0.003,
-    hold_need: bool = True,       # 你要“时间点告警”，建议先 False；要更稳再 True
-    hold_eps: float = 0.0015,
-    max_wick: float = 0.55,
+    hold_need: bool = True,    # 站稳确认
+    hold_eps: float = 0.0015,  #
+    max_wick: float = 0.55,    #上影线
     min_body: float = 0.30,
 ) -> Tuple[str, Dict]:
     """

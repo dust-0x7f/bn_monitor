@@ -63,7 +63,6 @@ def process_symbol(symbol: str):
         elif event == "BREAKOUT":
             def now_ms():
                 return int(time.time() * 1000)
-            now = now_ms()
 
             breakout_open_time = int(info["breakout_open_time"])  # ms
             now = now_ms()
