@@ -2,7 +2,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from binance import BinanceAPIException
 from binance.client import Client  # 现货客户端
@@ -18,6 +18,21 @@ from interal_enum import KlineInterval
 
 API_KEY = os.getenv("BINANCE_API_KEY")  # 自定义环境变量名，如BINANCE_API_KEY
 SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
+
+
+
+@dataclass(frozen=True)
+class OISnapshot:
+
+    timestamp: int
+
+    # 币相关
+    circulating_supply: Optional[float] = None  # CMCCirculatingSupply
+
+    # 合约 OI
+    sum_open_interest: Optional[float] = None         # sumOpenInterest（数量）
+    sum_open_interest_value: Optional[float] = None   # sumOpenInterestValue（价值，USDT）
+
 
 
 @dataclass
@@ -69,11 +84,11 @@ class BNMonitor:
         self.qps_limiter = QPSLimiter(8)
 
 
-    def getSymbolKlinesWithEndTime(self,symbol,internal,startTimeUnix,endTimeUnix) -> List[KlineData]:
+    def getSymbolKlinesWithEndTime(self, symbol, interval, startTimeUnix, endTimeUnix) -> List[KlineData]:
         self.qps_limiter.acquire()
         kline_list = []
         try:
-            resp = self.client.futures_klines(symbol=symbol, interval=internal, startTime=startTimeUnix,endTime=endTimeUnix)
+            resp = self.client.futures_klines(symbol=symbol, interval=interval, startTime=startTimeUnix, endTime=endTimeUnix)
             for kline in resp:
                 data = KlineData(
                     open_time=kline[0],
@@ -155,6 +170,21 @@ class BNMonitor:
                 print(error_msg)
 
         return kline_list
+
+    # 最多500条
+    def getOi(self,symbol,interval,startTimeUnix):
+        ois = self.client.futures_open_interest_hist(symbol=symbol,period=interval,startTime=startTimeUnix,limit = 500)
+        ans = []
+        for line in ois:
+            data = OISnapshot(
+                sum_open_interest=line["sumOpenInterest"],
+                sum_open_interest_value = line["sumOpenInterest"],
+                timestamp =line["timestamp"],
+                circulating_supply = line["CMCCirculatingSupply"],
+            )
+            ans.append(data)
+        return ans
+
 
     def getTargetSymbols(self):
         resp = self.client.futures_exchange_info()

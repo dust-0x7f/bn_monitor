@@ -68,7 +68,7 @@ def process_symbol(symbol: str):
             now = now_ms()
 
             # ❶ 时间窗口过滤：不是“新发生”的，直接忽略
-            ALERT_WINDOW_MS = 5 * 60 * 1000  # 5 分钟
+            ALERT_WINDOW_MS = 15 * 60 * 1000  # 5 分钟
             if now - breakout_open_time > ALERT_WINDOW_MS:
                 return
              # 告警：发生突破（info["breakout_open_time"]）
